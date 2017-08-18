@@ -1,102 +1,77 @@
-require 'xlua'
-require 'trepl'
+require 'cudnn'
+require 'cunn'
 require 'image'
-require 'nn'
-require 'torch'
 require 'mattorch'
+require 'nn'
 require 'stn'
+require 'trepl'
+require 'xlua'
 local pl = require('pl.import_into')()
 
 local cmd = torch.CmdLine()
-cmd:option('-dataName', 'fountain')
-cmd:option('-dataNumber', 11)
-cmd:option('-resolution', 64)
+cmd:option('-dataName', '')
+cmd:option('-imageNum', 6)
 cmd:option('-batchSize', 128)
-cmd:option('-modelDirectory', '../CPU/') 
+cmd:option('-modelDir', './model/') 
 cmd:option('-networkType', '') -- necessary
-cmd:option('-normalizeType', 1)
 local option = cmd:parse(arg)
-assert(option.netWork ~= '', ' you should specify the network type')
-local data_name = option.dataName
-local data_number = option.dataNumber
-local resolution = option.resolution
-local batch_size = option.batchSize
-local model_directory = option.modelDirectory
-local network_type = option.networkType
-local normalize_type = option.normalizeType
-local descriptor_dimension = 128
+assert(option.networkType ~= '', ' you should specify the network type')
+
+local dataName = option.dataName
+local imageNum = option.imageNum
+local batchSize = option.batchSize
+local modelDir = option.modelDir
+local networkType = option.networkType
+local descriptorDim = 128
 
 local model
-local input_patch_size
-if network_type == 'DeepDesc_a' then
+local inputPatchSize
+if networkType == 'DeepDesc_a' then
 	model = 'DeepDesc_all.t7'
-	input_patch_size = 64
-elseif network_type == 'DeepDesc_ly' then
+	inputPatchSize = 64
+elseif networkType == 'DeepDesc_ly' then
 	model = 'DeepDesc_liberty+yosemite.t7'
-	input_patch_size = 64
-elseif network_type == 'PNNet' then
+	inputPatchSize = 64
+elseif networkType == 'PNNet' then
 	model = 'PNNet_liberty.t7'
-	input_patch_size = 32
-elseif network_type == 'TFeat_R' then
+	inputPatchSize = 32
+elseif networkType == 'TFeat_R' then
 	model = 'TFeat_RatioS_liberty.t7'
-	input_patch_size = 32
-elseif network_type == 'TFeat_M' then
+	inputPatchSize = 32
+elseif networkType == 'TFeat_M' then
 	model = 'TFeat_MarginS_liberty.t7'
-	input_patch_size = 32
+	inputPatchSize = 32
 else
-	print(' the model hasnt been defined')
+	print(' the model type hasnt been defined')
 	os.exit()
 end
 
-local net = torch.load(model_directory..model)
-print(net)
+local network = torch.load(paths.concat(modelDir, model)):cuda()
+print('use '..networkType..' to extract the feature of '..dataName)
 
-for image = 1,data_number do
+for image = 1,imageNum do
 	print(' image: '..image)
 
 	-------------------------------------------------------------------------
 	--Load patch-------------------------------------------------------------
-	local file_content = mattorch.load('./data/'..data_name..'/patch/'..image..'/R_'..resolution..'_patch.mat')
+	local fileContent = mattorch.load(paths.concat('gooddata', dataName, 'patch', image, 'R_64_patch.mat'))
 	--Due to the mattorch format, the loaded matrix should be transposed
 	--Remember to use "clone()" inside the for loop
-	local frame = file_content.frame:clone()
+	local frame = fileContent.frame:clone()
 	local patch
 	
-	if normalize_type == 0 then
-		if input_patch_size == 32 then
-			patch = file_content.patch_32:clone()
-		elseif input_patch_size == 64 then
-			patch = file_content.patch_64:clone()
-		else 
-			print(' you should first extract patch with suitable size!')
-			os.exit()
-		end
-	elseif normalize_type == 1 then
-		if input_patch_size == 32 then
-			patch = file_content.local_norm_patch_32:clone()
-		elseif input_patch_size == 64 then
-			patch = file_content.local_norm_patch_64:clone()
-		else 
-			print(' you should first extract patch with suitable size!')
-			os.exit()
-		end
-	elseif normalize_type == 2 then
-		if input_patch_size == 32 then
-			patch = file_content.global_norm_patch_32:clone()
-		elseif input_patch_size == 64 then
-			patch = file_content.global_norm_patch_64:clone()
-		else 
-			print(' you should first extract patch with suitable size!')
-			os.exit()
-		end
-	else
-		print(' invalid normalization type')
+	if inputPatchSize == 32 then
+		patch = fileContent.local_norm_patch_32:clone()
+	elseif inputPatchSize == 64 then
+		patch = fileContent.local_norm_patch_64:clone()
+	else 
+		print(' you should first extract patch with suitable size!')
 		os.exit()
 	end
 
-	local patch_number = patch:size(1)
+	local patchNum = patch:size(1)
 
-	for k = 1,patch_number do
+	for k = 1,patchNum do
 		local tmp = patch[{k, 1, {}, {}}]:clone()
 		patch[{k, 1, {}, {}}] = tmp:t():clone()
 	end
@@ -104,17 +79,18 @@ for image = 1,data_number do
 
 	-------------------------------------------------------------------------
 	--Feed into network------------------------------------------------------
-	local descriptor = torch.Tensor(patch_number, descriptor_dimension)
-	local descriptor_split = descriptor:split(batch_size)
+	local descriptor = torch.Tensor(patchNum, descriptorDim)
+	local descriptorSplit = descriptor:split(batchSize)
 
-	for i,v in ipairs(patch:split(batch_size)) do
-		descriptor_split[i]:copy(net:forward(v))
+	for i,v in ipairs(patch:split(batchSize)) do
+		v = v:cuda()
+		descriptorSplit[i]:copy(network:forward(v))
 	end
 
 	-------------------------------------------------------------------------
 	--Save the output--------------------------------------------------------
-	local output_content = {frame = frame, descriptor = descriptor}
-	mattorch.save('./data/'..data_name..'/patch/'..image..'/R_'..resolution..'_'..network_type..'.mat', output_content)
+	local outputContent = {frame = frame, descriptor = descriptor}
+	mattorch.save(paths.concat('gooddata', dataName, 'patch', image, 'R_64_'..networkType..'.mat'), outputContent)
 
 	collectgarbage()
 end

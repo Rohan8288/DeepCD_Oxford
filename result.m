@@ -10,7 +10,7 @@ option.dataNumber = 8;
 option.imageNumber = 6;
 %option.pplfGamma = 1;
 
-networkType = {'Sift', 'ASVSift', 'DeepDesc_ly', 'DeepDesc_a', 'PNNet', 'TFeat_R', 'TFeat_M', 'DeepCD_2S_noSTN', 'DeepCD_2S_new'};
+networkType = {'Sift', 'DeepDesc_ly', 'DeepDesc_a', 'PNNet', 'TFeat_R', 'TFeat_M', 'DeepCD_2S', 'DeepCD_2S_noSTN', 'DeepCD_2S_new'};
 networkNum = size(networkType, 2);
 apArray = zeros(1, option.dataNumber);
 correctMatch = cell(networkNum, 1);
