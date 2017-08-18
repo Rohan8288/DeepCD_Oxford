@@ -7,11 +7,9 @@
 # usage
 
   1. dataProcess.m : extract patches from the Oxford dataset by VLFeat (run in matlab)
-  
-    or you can directly use the pre-extracted patches
+    or you can directly use the pre-extracted patches
     
   2. extract.sh : extract features from patches by CNN-based models (bash extract.sh)
-  
     or you can directly use the pre-extracted features
     
   3. result.m : evaluate the features extractes by CNN-based models
